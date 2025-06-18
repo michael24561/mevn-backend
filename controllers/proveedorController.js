@@ -1,4 +1,5 @@
 const Proveedor = require("../models/Proveedor");
+const Producto = require("../models/Producto");
 
 // Crear un nuevo proveedor
 exports.crearProveedor = async (req, res) => {
@@ -47,15 +48,34 @@ exports.actualizarProveedor = async (req, res) => {
   }
 };
 
-// Eliminar un proveedor
+// Eliminar un proveedor (con validación de productos asociados)
 exports.eliminarProveedor = async (req, res) => {
   try {
+    // Verificar si hay productos asociados
+    const productosAsociados = await Producto.find({ proveedor: req.params.id });
+    
+    if (productosAsociados.length > 0) {
+      return res.status(400).json({ 
+        error: "No se puede eliminar el proveedor porque tiene productos asociados",
+        productos: productosAsociados.map(p => p.nombre) // Opcional: enviar nombres de productos
+      });
+    }
+
+    // Si no hay productos asociados, proceder con la eliminación
     const proveedorEliminado = await Proveedor.findByIdAndDelete(req.params.id);
+    
     if (!proveedorEliminado) {
       return res.status(404).json({ error: "Proveedor no encontrado" });
     }
-    res.json({ mensaje: "Proveedor eliminado correctamente" });
+    
+    res.json({ 
+      mensaje: "Proveedor eliminado correctamente",
+      proveedor: proveedorEliminado
+    });
   } catch (error) {
-    res.status(500).json({ error: "Error al eliminar el proveedor" });
+    res.status(500).json({ 
+      error: "Error al eliminar el proveedor",
+      detalle: error.message 
+    });
   }
 };

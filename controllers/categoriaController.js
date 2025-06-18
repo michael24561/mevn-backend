@@ -1,4 +1,5 @@
 const Categoria = require("../models/Categoria");
+const Producto = require("../models/Producto");
 
 // Crear nueva categoría
 exports.crearCategoria = async (req, res) => {
@@ -49,13 +50,32 @@ exports.actualizarCategoria = async (req, res) => {
 
 // Eliminar una categoría
 exports.eliminarCategoria = async (req, res) => {
-    try {
-        const categoriaEliminada = await Categoria.findByIdAndDelete(req.params.id);
-        if (!categoriaEliminada) {
-            return res.status(404).json({ error: "Categoría no encontrada" });
-        }
-        res.json({ mensaje: "Categoría eliminada correctamente" });
-    } catch (error) {
-        res.status(500).json({ error: "Error al eliminar categoría" });
+  try {
+    // Verificar si hay productos asociados
+    const productosAsociados = await Producto.find({ categoria: req.params.id });
+    
+    if (productosAsociados.length > 0) {
+      return res.status(400).json({ 
+        error: "No se puede eliminar la categoría porque tiene productos asociados",
+        productos: productosAsociados.map(p => p.nombre) // Opcional: enviar nombres de productos
+      });
     }
+
+    // Si no hay productos, proceder con la eliminación
+    const categoriaEliminada = await Categoria.findByIdAndDelete(req.params.id);
+    
+    if (!categoriaEliminada) {
+      return res.status(404).json({ error: "Categoría no encontrada" });
+    }
+    
+    res.json({ 
+      mensaje: "Categoría eliminada correctamente",
+      categoria: categoriaEliminada
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      error: "Error al eliminar categoría",
+      detalle: error.message 
+    });
+  }
 };
