@@ -38,6 +38,10 @@ const ClienteSchema = new mongoose.Schema({
     type: Date, 
     default: Date.now 
   },
+    historialVentas: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Venta'
+    }],
   ultimo_acceso: Date,
   activo: {
     type: Boolean,

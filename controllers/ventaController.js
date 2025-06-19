@@ -1,67 +1,96 @@
-const Venta = require("../models/Venta");
+const Venta = require('../models/Venta');
+const DetalleVenta = require('../models/DetalleVenta');
+const Carrito = require('../models/Carrito');
+const CarritoItem = require('../models/CarritoItem');
+const Inventario = require('../models/Inventario');
 
-// Crear una nueva venta
-exports.crearVenta = async (req, res) => {
-    try {
-        const nuevaVenta = new Venta(req.body);
-        await nuevaVenta.save();
-        res.status(201).json(nuevaVenta);
-    } catch (error) {
-        res.status(400).json({ error: "Error al crear venta", detalle: error.message });
+const crearVenta = async (req, res) => {
+  try {
+    const { metodoPagoId } = req.body;
+    const clienteId = req.user.id; // Asume que NextAuth inyecta esto
+
+    // 1. Validar carrito
+    const carrito = await Carrito.findOne({ cliente: clienteId }).populate({
+      path: 'items',
+      populate: { path: 'producto' }
+    });
+
+    if (!carrito || carrito.items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'El carrito está vacío'
+      });
     }
+
+    // 2. Crear venta
+    const venta = new Venta({
+      cliente: clienteId,
+      items: [],
+      total: carrito.total,
+      metodoPago: metodoPagoId,
+      sucursal: carrito.sucursal
+    });
+
+    // 3. Procesar items
+    for (const item of carrito.items) {
+      const inventario = await Inventario.findOne({
+        producto: item.producto._id,
+        sucursal: carrito.sucursal
+      });
+
+      if (!inventario || inventario.stock < item.cantidad) {
+        throw new Error(`Stock insuficiente para: ${item.producto.nombre}`);
+      }
+
+      const detalle = new DetalleVenta({
+        venta: venta._id,
+        producto: item.producto._id,
+        cantidad: item.cantidad,
+        precioUnitario: item.precioUnitario
+      });
+
+      await detalle.save();
+      venta.items.push(detalle._id);
+      inventario.stock -= item.cantidad;
+      await inventario.save();
+    }
+
+    // 4. Finalizar
+    await venta.save();
+    await CarritoItem.deleteMany({ _id: { $in: carrito.items } });
+    await Carrito.findByIdAndDelete(carrito._id);
+
+    res.status(201).json({
+      success: true,
+      data: await venta.populate(['items', 'metodoPago'])
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error al procesar la venta',
+      error: error.message
+    });
+  }
 };
 
-// Obtener todas las ventas
-exports.obtenerVentas = async (req, res) => {
-    try {
-        const ventas = await Venta.find()
-            .populate("cliente", "nombre email")
-            .populate("metodo_pago", "nombre");
-        res.json(ventas);
-    } catch (error) {
-        res.status(500).json({ error: "Error al obtener ventas" });
-    }
+const obtenerHistorial = async (req, res) => {
+  try {
+    const ventas = await Venta.find({ cliente: req.user.id })
+      .populate({
+        path: 'items',
+        populate: { path: 'producto' }
+      })
+      .sort({ fecha: -1 });
+
+    res.json({ success: true, data: ventas });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener historial',
+      error: error.message
+    });
+  }
 };
 
-// Obtener una venta por ID
-exports.obtenerVentaPorId = async (req, res) => {
-    try {
-        const venta = await Venta.findById(req.params.id)
-            .populate("cliente", "nombre email")
-            .populate("metodo_pago", "nombre");
-
-        if (!venta) {
-            return res.status(404).json({ error: "Venta no encontrada" });
-        }
-
-        res.json(venta);
-    } catch (error) {
-        res.status(500).json({ error: "Error al buscar la venta" });
-    }
-};
-
-// Actualizar una venta
-exports.actualizarVenta = async (req, res) => {
-    try {
-        const ventaActualizada = await Venta.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        if (!ventaActualizada) {
-            return res.status(404).json({ error: "Venta no encontrada" });
-        }
-        res.json(ventaActualizada);
-    } catch (error) {
-        res.status(400).json({ error: "Error al actualizar la venta" });
-    }
-};
-
-// Eliminar una venta
-exports.eliminarVenta = async (req, res) => {
-    try {
-        const ventaEliminada = await Venta.findByIdAndDelete(req.params.id);
-        if (!ventaEliminada) {
-            return res.status(404).json({ error: "Venta no encontrada" });
-        }
-        res.json({ mensaje: "Venta eliminada correctamente" });
-    } catch (error) {
-        res.status(500).json({ error: "Error al eliminar la venta" });
-    }
-};
+module.exports = { crearVenta, obtenerHistorial };

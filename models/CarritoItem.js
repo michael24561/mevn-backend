@@ -1,14 +1,9 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const DetalleVentaSchema = new mongoose.Schema({
-  venta: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Venta',
-    required: true
-  },
+const CarritoItemSchema = new mongoose.Schema({
   producto: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Producto',
+    ref: "Producto",
     required: true
   },
   cantidad: {
@@ -25,13 +20,18 @@ const DetalleVentaSchema = new mongoose.Schema({
     type: Number,
     required: true,
     min: 0
+  },
+  carrito: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Carrito",
+    required: true
   }
 }, { timestamps: true });
 
-// Calcular subtotal automáticamente
-DetalleVentaSchema.pre('save', function(next) {
+// Calcular subtotal antes de guardar
+CarritoItemSchema.pre('save', function(next) {
   this.subtotal = this.precioUnitario * this.cantidad;
   next();
 });
 
-module.exports = mongoose.model('DetalleVenta', DetalleVentaSchema);
+module.exports = mongoose.model("CarritoItem", CarritoItemSchema);
