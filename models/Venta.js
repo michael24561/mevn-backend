@@ -25,15 +25,12 @@ const VentaSchema = new mongoose.Schema({
     default: 'pendiente'
   },
   metodoPago: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'MetodoPago',
-    required: true
-  },
-  sucursal: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Sucursal',
-    required: true
-  }
+  type: String,
+  enum: ['paypal'], // luego podrías agregar más: ['paypal', 'yape', 'visa']
+  default: 'paypal',
+  required: true
+},
+paypalData: { type: Object } 
 }, { timestamps: true });
 
 module.exports = mongoose.model('Venta', VentaSchema);
