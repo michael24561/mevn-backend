@@ -3,7 +3,7 @@ const CarritoItem = require('../models/CarritoItem');
 const Producto = require('../models/Producto');
 const Cliente = require('../models/Cliente');
 
-// Obtener o crear carrito
+// Obtener carrito del cliente (si no existe, crea uno nuevo)
 const obtenerCarrito = async (req, res) => {
   try {
     const clienteId = req.query.clienteId || req.body.clienteId || req.params.clienteId;
@@ -22,7 +22,11 @@ const obtenerCarrito = async (req, res) => {
       });
 
     if (!carrito) {
-      carrito = new Carrito({ cliente: clienteId, items: [], total: 0 });
+      carrito = new Carrito({ 
+        cliente: clienteId, 
+        items: [], 
+        total: 0
+      });
       await carrito.save();
       await Cliente.findByIdAndUpdate(clienteId, { carrito: carrito._id });
     }
@@ -67,7 +71,11 @@ const agregarItem = async (req, res) => {
 
     let carrito = await Carrito.findOne({ cliente: clienteId });
     if (!carrito) {
-      carrito = new Carrito({ cliente: clienteId, items: [], total: 0 });
+      carrito = new Carrito({ 
+        cliente: clienteId, 
+        items: [], 
+        total: 0
+      });
       await carrito.save();
       await Cliente.findByIdAndUpdate(clienteId, { carrito: carrito._id });
     }
@@ -115,7 +123,7 @@ const agregarItem = async (req, res) => {
   }
 };
 
-// Actualizar item
+// Actualizar cantidad de un item
 const actualizarItem = async (req, res) => {
   try {
     const { itemId } = req.params;
@@ -234,7 +242,7 @@ const eliminarItem = async (req, res) => {
   }
 };
 
-// Vaciar carrito
+// Vaciar carrito completamente
 const vaciarCarrito = async (req, res) => {
   try {
     const clienteId = req.query.clienteId || req.body.clienteId;

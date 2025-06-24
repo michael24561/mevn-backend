@@ -1,17 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { 
-  crearOrdenPaypal, 
-  capturarPago, 
-  obtenerHistorial,
-  obtenerVentaPorId,
-  procesarVentaSimulada
-} = require('../controllers/ventaController');
+const ventaController = require('../controllers/ventaController');
 
-router.post('/crear-orden-paypal', crearOrdenPaypal);
-router.post('/capturar-pago', capturarPago);
-router.post('/procesar-venta-simulada', procesarVentaSimulada);
-router.get('/historial', obtenerHistorial);
-router.get('/:id', obtenerVentaPorId);
+router.post('/', ventaController.procesarVenta);
+router.get('/:id', ventaController.obtenerVentaPorId);
+router.get('/historial/cliente', ventaController.obtenerHistorialCliente);
 
 module.exports = router;

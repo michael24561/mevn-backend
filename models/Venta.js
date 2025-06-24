@@ -1,14 +1,38 @@
 const mongoose = require('mongoose');
 
 const VentaSchema = new mongoose.Schema({
+  codigoVenta: {
+    type: String,
+    unique: true,
+    required: true,
+    default: () => `VEN-${Date.now()}-${Math.floor(Math.random() * 1000)}` // Genera código único
+  },
   cliente: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Cliente',
     required: true
   },
   items: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'DetalleVenta'
+    producto: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Producto',
+      required: true
+    },
+    cantidad: {
+      type: Number,
+      required: true,
+      min: 1
+    },
+    precioUnitario: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+    subtotal: {
+      type: Number,
+      required: true,
+      min: 0
+    }
   }],
   total: {
     type: Number,
@@ -21,16 +45,9 @@ const VentaSchema = new mongoose.Schema({
   },
   estado: {
     type: String,
-    enum: ['pendiente', 'completada', 'cancelada'],
-    default: 'pendiente'
-  },
-  metodoPago: {
-  type: String,
-  enum: ['paypal'], // luego podrías agregar más: ['paypal', 'yape', 'visa']
-  default: 'paypal',
-  required: true
-},
-paypalData: { type: Object } 
+    enum: ['en proceso', 'cancelada', 'completada'],
+    default: 'en proceso'
+  }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Venta', VentaSchema);
