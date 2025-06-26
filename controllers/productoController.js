@@ -1,20 +1,13 @@
 const Producto = require("../models/Producto");
-const multer = require('multer');
+const mongoose = require('mongoose'); 
 const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 
-// Configuración de Multer para almacenar imágenes
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'public/uploads/'); // Asegúrate que esta carpeta exista
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + path.extname(file.originalname)); // Nombre único
-  }
-});
-
-const upload = multer({ 
-  storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // Límite de 5MB
+// Configuración simple de Multer
+const upload = multer({
+  dest: 'public/uploads/',
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (req, file, cb) => {
     const filetypes = /jpeg|jpg|png|gif/;
     const mimetype = filetypes.test(file.mimetype);
@@ -23,11 +16,11 @@ const upload = multer({
     if (mimetype && extname) {
       return cb(null, true);
     }
-    cb(new Error('Error: Solo se permiten imágenes (JPEG, JPG, PNG, GIF)'));
+    cb(new Error('Solo se permiten imágenes (JPEG, JPG, PNG, GIF)'));
   }
-}).single('imagen'); // 'imagen' es el nombre del campo en el formulario
+}).single('imagen');
 
-// Crear un nuevo producto (con imagen)
+// Crear producto
 exports.crearProducto = async (req, res) => {
   upload(req, res, async (err) => {
     if (err) {
@@ -36,9 +29,8 @@ exports.crearProducto = async (req, res) => {
 
     try {
       const { nombre, descripcion, precio, stock, categoria, proveedor } = req.body;
-      const imagen = req.file ? '/uploads/' + req.file.filename : null;
-
-      if (!imagen) {
+      
+      if (!req.file) {
         return res.status(400).json({ error: "La imagen es requerida" });
       }
 
@@ -47,61 +39,25 @@ exports.crearProducto = async (req, res) => {
         descripcion,
         precio,
         stock,
-        imagen,
+        imagen: '/uploads/' + req.file.filename,
         categoria,
         proveedor
       });
 
       await nuevoProducto.save();
-      res.status(201).json(nuevoProducto);
+      
+      res.status(201).json({
+        ...nuevoProducto.toObject(),
+        imagenUrl: `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`
+      });
     } catch (error) {
-      res.status(400).json({ error: "Error al crear el producto", detalle: error.message });
-    }
-  });
-};
-
-// Actualizar un producto (con o sin imagen)
-exports.actualizarProducto = async (req, res) => {
-  upload(req, res, async (err) => {
-    if (err) {
-      return res.status(400).json({ error: err.message });
-    }
-
-    try {
-      const { nombre, descripcion, precio, stock, categoria, proveedor } = req.body;
-      const updateData = {
-        nombre,
-        descripcion,
-        precio,
-        stock,
-        categoria,
-        proveedor
-      };
-
-      // Si se subió una nueva imagen, actualizamos la ruta
       if (req.file) {
-        updateData.imagen = '/uploads/' + req.file.filename;
+        fs.unlinkSync(req.file.path);
       }
-
-      const productoActualizado = await Producto.findByIdAndUpdate(
-        req.params.id, 
-        updateData, 
-        { new: true }
-      ).populate("categoria", "nombre")
-       .populate("proveedor", "nombre");
-
-      if (!productoActualizado) {
-        return res.status(404).json({ error: "Producto no encontrado" });
-      }
-      res.json(productoActualizado);
-    } catch (error) {
-      res.status(400).json({ error: "Error al actualizar el producto", detalle: error.message });
+      res.status(400).json({ error: "Error al crear el producto" });
     }
   });
 };
-
-// Los demás métodos (obtenerProductos, obtenerProductoPorId, eliminarProducto)
-// se mantienen igual que en tu código actual
 
 // Obtener todos los productos
 exports.obtenerProductos = async (req, res) => {
@@ -109,35 +65,121 @@ exports.obtenerProductos = async (req, res) => {
     const productos = await Producto.find()
       .populate("categoria", "nombre")
       .populate("proveedor", "nombre");
-    res.json(productos);
+
+    const productosConImagen = productos.map(p => ({
+      ...p.toObject(),
+      imagenUrl: `${req.protocol}://${req.get('host')}${p.imagen}`
+    }));
+
+    res.json(productosConImagen);
   } catch (error) {
     res.status(500).json({ error: "Error al obtener productos" });
   }
 };
 
-// Obtener un producto por ID
-exports.obtenerProductoPorId = async (req, res) => {
+// Obtener producto por ID o slug
+// Obtener producto por ID o slug - Versión mejorada
+exports.obtenerProducto = async (req, res) => {
   try {
-    const producto = await Producto.findById(req.params.id)
-      .populate("categoria", "nombre")
-      .populate("proveedor", "nombre");
-    if (!producto) {
-      return res.status(404).json({ error: "Producto no encontrado" });
+    const { id } = req.params;
+    
+    // Validación básica del parámetro
+    if (!id || id.trim() === "") {
+      return res.status(400).json({ 
+        error: "Se requiere un ID o slug válido",
+        detalles: "No se proporcionó ningún identificador"
+      });
     }
-    res.json(producto);
+
+    let producto;
+    const esObjectId = mongoose.Types.ObjectId.isValid(id);
+
+    if (esObjectId) {
+      producto = await Producto.findById(id)
+        .populate("categoria", "nombre")
+        .populate("proveedor", "nombre");
+    } else {
+      producto = await Producto.findOne({ slug: id.toLowerCase().trim() })
+        .populate("categoria", "nombre")
+        .populate("proveedor", "nombre");
+    }
+
+    if (!producto) {
+      return res.status(404).json({ 
+        error: "Producto no encontrado",
+        detalles: `No se encontró producto con ID/slug: ${id}`,
+        sugerencia: "Verifique el identificador o intente listar todos los productos primero"
+      });
+    }
+
+    // Construir URL de imagen dinámica
+    const protocol = req.protocol;
+    const host = req.get('host');
+    const imagenUrl = `${protocol}://${host}${producto.imagen}`;
+
+    res.json({
+      ...producto.toObject(),
+      imagenUrl,
+      links: {
+        categoria: `${protocol}://${host}/api/categorias/${producto.categoria._id}`,
+        proveedor: `${protocol}://${host}/api/proveedores/${producto.proveedor._id}`
+      }
+    });
+
   } catch (error) {
-    res.status(500).json({ error: "Error al buscar el producto" });
+    console.error("Error en obtenerProducto:", error);
+    res.status(500).json({ 
+      error: "Error interno al buscar el producto",
+      detalles: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 };
 
+// Actualizar producto
+exports.actualizarProducto = async (req, res) => {
+  upload(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message });
+    }
 
-// Eliminar un producto
+    try {
+      const { id } = req.params;
+      const updateData = { ...req.body };
+
+      if (req.file) {
+        updateData.imagen = '/uploads/' + req.file.filename;
+      }
+
+      const producto = await Producto.findByIdAndUpdate(id, updateData, { 
+        new: true 
+      });
+
+      if (!producto) {
+        if (req.file) fs.unlinkSync(req.file.path);
+        return res.status(404).json({ error: "Producto no encontrado" });
+      }
+
+      res.json({
+        ...producto.toObject(),
+        imagenUrl: `${req.protocol}://${req.get('host')}${producto.imagen}`
+      });
+    } catch (error) {
+      if (req.file) fs.unlinkSync(req.file.path);
+      res.status(400).json({ error: "Error al actualizar el producto" });
+    }
+  });
+};
+
+// Eliminar producto
 exports.eliminarProducto = async (req, res) => {
   try {
-    const productoEliminado = await Producto.findByIdAndDelete(req.params.id);
-    if (!productoEliminado) {
+    const producto = await Producto.findByIdAndDelete(req.params.id);
+    
+    if (!producto) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
+
     res.json({ mensaje: "Producto eliminado correctamente" });
   } catch (error) {
     res.status(500).json({ error: "Error al eliminar el producto" });
