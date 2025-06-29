@@ -81,6 +81,39 @@ const procesarVenta = async (req, res) => {
   }
 };
 
+const obtenerTodasLasVentas = async (req, res) => {
+  try {
+    const { fechaInicio, fechaFin, estado } = req.query;
+    
+    const filtro = {};
+    
+    // Filtro por fechas
+    if (fechaInicio && fechaFin) {
+      filtro.fecha = {
+        $gte: new Date(fechaInicio),
+        $lte: new Date(fechaFin)
+      };
+    }
+    
+    // Filtro por estado
+    if (estado) {
+      filtro.estado = estado;
+    }
+    
+    const ventas = await Venta.find(filtro)
+      .populate('cliente', 'nombre email')
+      .populate('items.producto', 'nombre precio')
+      .sort({ fecha: -1 });
+    
+    res.json({ success: true, data: ventas });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
 // En tu controlador de ventas (backend)
 const obtenerVentaPorId = async (req, res) => {
   try {
@@ -135,5 +168,6 @@ const obtenerHistorialCliente = async (req, res) => {
 module.exports = {
   procesarVenta,
   obtenerVentaPorId,
-  obtenerHistorialCliente
+  obtenerHistorialCliente,
+  obtenerTodasLasVentas
 };

@@ -18,14 +18,46 @@ exports.crearCategoria = async (req, res) => {
 };
 
 // Obtener todas las categorías
+// Modifica tu función obtenerCategorias existente o crea una nueva
 exports.obtenerCategorias = async (req, res) => {
-    try {
-        const categorias = await Categoria.find({}, 'nombre descripcion slug destacada')
-                                         .sort({ destacada: -1, nombre: 1 });
-        res.json(categorias);
-    } catch (error) {
-        res.status(500).json({ error: "Error al obtener categorías", detalle: error.message });
+  try {
+    // Opción 1: Usando populate (menos eficiente para conteos grandes)
+    const categorias = await Categoria.find().lean();
+    
+    // Opción 2: Más eficiente con aggregate
+    // const categorias = await Categoria.aggregate([
+    //   {
+    //     $lookup: {
+    //       from: "productos",
+    //       localField: "_id",
+    //       foreignField: "categoria",
+    //       as: "productos"
+    //     }
+    //   },
+    //   {
+    //     $addFields: {
+    //       productosCount: { $size: "$productos" }
+    //     }
+    //   },
+    //   {
+    //     $project: {
+    //       productos: 0 // Excluimos el array de productos
+    //     }
+    //   }
+    // ]);
+
+    // Si usas la opción 1 (populate), necesitas contar después:
+    for (const categoria of categorias) {
+      categoria.productosCount = await Producto.countDocuments({ categoria: categoria._id });
     }
+
+    res.json(categorias);
+  } catch (error) {
+    res.status(500).json({ 
+      error: "Error al obtener categorías",
+      detalles: error.message 
+    });
+  }
 };
 
 // Obtener categorías destacadas (para la página principal)

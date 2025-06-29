@@ -5,5 +5,6 @@ const ventaController = require('../controllers/ventaController');
 router.post('/', ventaController.procesarVenta);
 router.get('/:id', ventaController.obtenerVentaPorId);
 router.get('/historial/cliente', ventaController.obtenerHistorialCliente);
+router.get('/', ventaController.obtenerTodasLasVentas); 
 
 module.exports = router;
